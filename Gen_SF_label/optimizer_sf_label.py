@@ -356,7 +356,7 @@ def optimize(cfg):
     # save_bounding_boxes_as_mesh(anchors, "./3DSFLabeling/Driving_datasets/argoverse/Argoverse2_LiDAR_SF/anchors.ply")
     anchors = anchors.float().to(device='cuda')
 
-    data = make_data_loader(cfg, phase='test', data_filename = args.data_filename)
+    data = make_data_loader(cfg, phase='train', data_filename = args.data_filename)
 
     errors = defaultdict(list)
 

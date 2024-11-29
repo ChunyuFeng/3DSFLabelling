@@ -5,6 +5,9 @@ import logging
 import numpy as np
 import torch.utils.data as data
 
+from nuscenes.nuscenes import NuScenes
+from nuscenes.utils.data_classes import LidarPointCloud
+
 projection_matrix = np.array([[7.25995070e+02, 6.04164924e+02, -9.75088151e+00, 4.48572800e+01],
                               [-5.84187278e+00, 1.69760552e+02, -7.22248117e+02, 2.16379100e-01],
                               [ 7.40252700e-03, 9.99963100e-01, -4.35161400e-03, 2.74588400e-03]])
@@ -86,79 +89,98 @@ class MELidarDataset(data.Dataset):
             self.files.append(name)
 
     def __getitem__(self, idx):
-        file = os.path.join(self.root, self.files[idx])
-        file_name = file.replace(os.sep, '/').split('/')[-1]
+        file_1_path = os.path.join(self.root, self.files[idx])
+        file_2_path = os.path.join(self.root, self.files[idx+1])
+        # file_name = file.replace(os.sep, '/').split('/')[-1]
 
-        # Load the data
-        data = np.load(file)
-        pc_1 = data['pc1']
-        pc_2 = data['pc2']
+        pc1 = LidarPointCloud.from_file(file_1_path).points.T
+        pc_1 = pc1.reshape((-1, 4))[:, :3]
+        pc2 = LidarPointCloud.from_file(file_2_path).points.T
+        pc_2 = pc2.reshape((-1, 4))[:, :3]
 
-        if 'normvector1' in data:
-            pc1_normals = data['normvector1']
-        else:
-            pc1_normals = np.zeros_like(pc_1)
-        
-        if 'normvector2' in data:
-            pc2_normals = data['normvector2']
-        else:
-            pc2_normals = np.zeros_like(pc_2)
-        # print('pc1_normals',pc1_normals,pc1_normals.shape)
-        # print('pc2_normals',pc2_normals,pc2_normals.shape)
-        if 'pc1_cam_mask' in data:
-            pc1_cam_mask = data['pc1_cam_mask']
-        elif 'front_mask_s' in data:
-            pc1_cam_mask = data['front_mask_s']
-        else:
-            pc1_cam_mask = np.ones(pc_1[:,0].shape, dtype=np.bool_)
+        # 临时增加的代码，用于测试流程
+        pc1_normals = np.zeros_like(pc_1)
+        pc2_normals = np.zeros_like(pc_2)
+        pc1_cam_mask = np.ones(pc_1[:, 0].shape, dtype=np.bool_)
+        pc2_cam_mask = np.ones(pc_2[:, 0].shape, dtype=np.bool_)
+        pose_1 = np.eye(4)
+        pose_2 = np.eye(4)
+        s_labels_1 = np.zeros(pc_1.shape[0])
+        s_labels_2 = np.zeros(pc_2.shape[0])
+        m_labels_1 = np.zeros(pc_1.shape[0])
+        m_labels_2 = np.zeros(pc_2.shape[0])
+        flow = np.zeros((np.sum(pc1_cam_mask), 3), dtype=pc_1.dtype)
 
-        if 'pc2_cam_mask' in data:
-            pc2_cam_mask = data['pc2_cam_mask']
-        elif 'front_mask_t' in data:
-            pc2_cam_mask = data['front_mask_t']
-        else:
-            pc2_cam_mask = np.ones(pc_2[:,0].shape, dtype=np.bool_)
-        # pc1_cam_mask = np.ones(pc_1[:,0].shape, dtype=np.bool)
-        # pc2_cam_mask = np.ones(pc_2[:,0].shape, dtype=np.bool)
-
-        if 'pose_s' in data:
-            pose_1 = data['pose_s']
-        else:
-            pose_1 = np.eye(4)
-
-        if 'pose_t' in data:
-            pose_2 = data['pose_t']
-        else:
-            pose_2 = np.eye(4)
-
-        if 'sem_label_s' in data:
-            s_labels_1 = data['sem_label_s']
-        else:
-            s_labels_1 = np.zeros(pc_1.shape[0])
-
-        if 'sem_label_t' in data:
-            s_labels_2 = data['sem_label_t']
-        else:
-            s_labels_2 = np.zeros(pc_2.shape[0])
-
-        if 'mot_label_s' in data:
-            m_labels_1 = data['mot_label_s']
-        elif 'inst_pc1' in data:
-            m_labels_1 = data['inst_pc1']
-        else:
-            m_labels_1 = np.zeros(pc_1.shape[0])
-
-        if 'mot_label_t' in data:
-            m_labels_2 = data['mot_label_t']
-        elif 'inst_pc2' in data:
-            m_labels_2 = data['inst_pc2']
-        else:
-            m_labels_2 = np.zeros(pc_2.shape[0])
-
-        if 'flow' in data:
-            flow = data['flow']
-        else:
-            flow = np.zeros((np.sum(pc1_cam_mask), 3), dtype=pc_1.dtype)
+        # # Load the data
+        # data = np.load(file)
+        # pc_1 = data['pc1']
+        # pc_2 = data['pc2']
+        #
+        # if 'normvector1' in data:
+        #     pc1_normals = data['normvector1']
+        # else:
+        #     pc1_normals = np.zeros_like(pc_1)
+        #
+        # if 'normvector2' in data:
+        #     pc2_normals = data['normvector2']
+        # else:
+        #     pc2_normals = np.zeros_like(pc_2)
+        # # print('pc1_normals',pc1_normals,pc1_normals.shape)
+        # # print('pc2_normals',pc2_normals,pc2_normals.shape)
+        # if 'pc1_cam_mask' in data:
+        #     pc1_cam_mask = data['pc1_cam_mask']
+        # elif 'front_mask_s' in data:
+        #     pc1_cam_mask = data['front_mask_s']
+        # else:
+        #     pc1_cam_mask = np.ones(pc_1[:,0].shape, dtype=np.bool_)
+        #
+        # if 'pc2_cam_mask' in data:
+        #     pc2_cam_mask = data['pc2_cam_mask']
+        # elif 'front_mask_t' in data:
+        #     pc2_cam_mask = data['front_mask_t']
+        # else:
+        #     pc2_cam_mask = np.ones(pc_2[:,0].shape, dtype=np.bool_)
+        # # pc1_cam_mask = np.ones(pc_1[:,0].shape, dtype=np.bool)
+        # # pc2_cam_mask = np.ones(pc_2[:,0].shape, dtype=np.bool)
+        #
+        # if 'pose_s' in data:
+        #     pose_1 = data['pose_s']
+        # else:
+        #     pose_1 = np.eye(4)
+        #
+        # if 'pose_t' in data:
+        #     pose_2 = data['pose_t']
+        # else:
+        #     pose_2 = np.eye(4)
+        #
+        # if 'sem_label_s' in data:
+        #     s_labels_1 = data['sem_label_s']
+        # else:
+        #     s_labels_1 = np.zeros(pc_1.shape[0])
+        #
+        # if 'sem_label_t' in data:
+        #     s_labels_2 = data['sem_label_t']
+        # else:
+        #     s_labels_2 = np.zeros(pc_2.shape[0])
+        #
+        # if 'mot_label_s' in data:
+        #     m_labels_1 = data['mot_label_s']
+        # elif 'inst_pc1' in data:
+        #     m_labels_1 = data['inst_pc1']
+        # else:
+        #     m_labels_1 = np.zeros(pc_1.shape[0])
+        #
+        # if 'mot_label_t' in data:
+        #     m_labels_2 = data['mot_label_t']
+        # elif 'inst_pc2' in data:
+        #     m_labels_2 = data['inst_pc2']
+        # else:
+        #     m_labels_2 = np.zeros(pc_2.shape[0])
+        #
+        # if 'flow' in data:
+        #     flow = data['flow']
+        # else:
+        #     flow = np.zeros((np.sum(pc1_cam_mask), 3), dtype=pc_1.dtype)
 
         labels_1 = np.logical_and(m_labels_1, s_labels_1!=254)
         labels_2 = np.logical_and(m_labels_2, s_labels_2!=254)
@@ -325,7 +347,10 @@ class MELidarDataset(data.Dataset):
         # R_ego = np.transpose(rot_normal_frame(R_ego)).astype(np.float32)
         # t_ego = normal_frame(t_ego.reshape(3)).astype(np.float32)
 
-        return (pc_1_eval, pc_2_eval, pc1_normals_eval, pc2_normals_eval, pc1_cam_mask, pc2_cam_mask, labels_1_eval, labels_2_eval, R_ego, t_ego, flow_eval, file)
+        # return (pc_1_eval, pc_2_eval, pc1_normals_eval, pc2_normals_eval, pc1_cam_mask, pc2_cam_mask,
+        #         labels_1_eval, labels_2_eval, R_ego, t_ego, flow_eval, file)
+        return (pc_1_eval, pc_2_eval, pc1_normals_eval, pc2_normals_eval, pc1_cam_mask, pc2_cam_mask,
+                labels_1_eval, labels_2_eval, R_ego, t_ego, flow_eval, file_1_path)
 
     def __len__(self):
         return len(self.files)
